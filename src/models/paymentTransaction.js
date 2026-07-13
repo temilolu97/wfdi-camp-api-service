@@ -14,7 +14,7 @@ module.exports = (sequelize, DataTypes) => {
         amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
         currency: { type: DataTypes.STRING, allowNull: false, defaultValue: 'NGN' },
         status: {
-            type: DataTypes.ENUM('Initiated', 'Success', 'Failed', 'Abandoned'),
+            type: DataTypes.ENUM('Initiated','Pending', 'Successful', 'Failed'),
             allowNull: false,
             defaultValue: 'Initiated',
         }

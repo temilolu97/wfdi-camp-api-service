@@ -1,3 +1,4 @@
+const REGISTRATION_STATUS = require("../constants/registrationStatusEnums");
 const { verifyPayment } = require("../integrations/BudpayIntegration");
 const { Registration, PaymentTransaction, ProviderLog } = require("../models");
 
@@ -45,13 +46,13 @@ const handleBudpayWebhook = async (log) => {
     }
 
     // idempotency guard — don't reprocess a webhook retry
-    if (tx.status === "Successful") {
-        await ProviderLog.update(
-            { Message: "Already processed, skipped" },
-            { where: { id: log.id } }
-        );
-        return;
-    }
+    // if (tx.status === "Successful") {
+    //     await ProviderLog.update(
+    //         { Message: "Already processed, skipped" },
+    //         { where: { id: log.id } }
+    //     );
+    //     return;
+    // }
 
     const verified = await verifyPayment(reference);
 
@@ -62,7 +63,7 @@ const handleBudpayWebhook = async (log) => {
         await tx.save();
 
         await Registration.update(
-            { registrationStatus: "CONFIRMED" },
+            { registrationStatus: REGISTRATION_STATUS.REGISTERED },
             { where: { id: tx.registrationId } }
         );
     } else {
