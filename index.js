@@ -13,6 +13,12 @@ const PORT = process.env.PORT || 3000;
 
 connectDB()
 
+app.get('/',(req,res)=>{
+    return res.status(200).json({
+        message:"App is up and running"
+    })
+})
+
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });
