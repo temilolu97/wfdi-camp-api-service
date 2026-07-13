@@ -1,74 +1,63 @@
 const REGISTRATION_STATUS = require("../constants/registrationStatusEnums");
-const Registration = require("../models/registrationModel")
 const { initiatePayment } = require('../integrations/BudpayIntegration');
 const { generateReference } = require("../helpers/commonHelper");
-const initiateRegistration = async(req, res) => {
+const { Guardian, Registration, PaymentTransaction, sequelize } = require('../models');
+const { where, fn, col } = require("sequelize");
+const initiateRegistration = async (req, res) => {
+    const payload = req.body;
+    const t = await sequelize.transaction();
+    console.log(payload);
+    
     try {
-        const {
-            firstName,
-            lastName,
-            dateOfBirth,
-            gender,
-            shirtSize,
-            guardianName,
-            guardianPhone,
-            guardianEmail,
-            homeAddress,
-            childRelationShipToGuardian,
-            amountDue,
-            medicalCondition,
-            emergencyContactName,
-            emergencyContactPhone,
-        } = req.body;
-
-        // Perform programmatic baseline verification checks
-        if (!firstName || !lastName || !guardianEmail ) {
-            return res.status(400).json({
-                status: "failed",
-                message: "Missing critical registration parameters."
-            });
-        }
-
-        var reference = generateReference();
-
-        // Persist the structured data record into your MySQL database table
-        const newRegistration = await Registration.create({
-            firstName,
-            lastName,
-            dateOfBirth,
-            gender,
-            shirtSize,
-            guardianName,
-            guardianPhone,
-            guardianEmail,
-            homeAddress,
-            childRelationShipToGuardian,
-            amountDue,
-            medicalCondition,
-            emergencyContactName,
-            emergencyContactPhone,
-            transactionReference: reference,
-            // Automatically falls back to 'PENDING_PAYMENT' via schema definition if omitted
-            registrationStatus: REGISTRATION_STATUS.PENDING_PAYMENT
+        const [guardian] = await Guardian.findOrCreate({
+            where:  {
+                Email:payload.guardianEmail.trim().toLowerCase(),
+            },
+            defaults: {
+                FullName: payload.guardianName,
+                PhoneNumber: payload.guardianPhone,
+                Email: payload.guardianEmail.toLowerCase().trim(),
+                RelationShipToChild: payload.relationship,
+            },
+            transaction: t,
         });
 
+        const registration = await Registration.create({
+            guardianId: guardian.id,
+            firstName: payload.firstName,
+            lastName: payload.lastName,
+            dateOfBirth: payload.dateOfBirth,
+            gender: payload.gender,
+            shirtSize: payload.shirtSize,
+            homeAddress: payload.homeAddress,
+            medicalCondition: payload.medicalCondition,
+            emergencyContactName: payload.emergencyContactName,
+            emergencyContactPhone: payload.emergencyContactPhone,
+            registrationStatus: 'PENDING_PAYMENT',
+        }, { transaction: t });
 
+        const reference = `WFDI-${registration.id}-${Date.now()}`;
 
-        var budpayResponse = await initiatePayment(newRegistration.guardianEmail, newRegistration.amountDue, reference);
+        const paymentTx = await PaymentTransaction.create({
+            registrationId: registration.id,
+            reference,
+            amount: payload.amountDue,
+            currency: 'NGN',
+            status: 'Initiated',
+        }, { transaction: t });
 
-        // Respond with success to client
-        return res.status(201).json({
-            status: "success",
-            message: "Registration initiated successfully.",
-            data: budpayResponse
-        });
+        await t.commit();
+
+        const budpayResponse = await initiatePayment(guardian.Email, paymentTx.amount, paymentTx.reference,
+            `${process.env.APP_URL}/payment/callback`);
+
+        return res.json({ paymentUrl: budpayResponse.data.authorization_url });
     }
     catch (err) {
-        res.status(500).json({
-            status: "failed",
-            message: err.message
-        })
+        (await t).rollback();
+        return res.status(500).json({ error: 'Registration failed', detail: err.message })
     }
+
 }
 
 
