@@ -1,4 +1,5 @@
 const express = require('express')
+const cors = require('cors')
 const { connectDB, sequelize } = require('./src/config/db.js');
 require('dotenv').config();
 const registrationRoutes = require('./src/routes/registrationRoutes.js')
@@ -6,6 +7,14 @@ const webhookRoutes = require('./src/routes/webhookRoutes.js')
 
 const app = express()
 
+app.use(cors({
+    origin: [
+        "https://camp.wfding.com",
+        "https://staging.camp.wfding.com",
+        "http://localhost:5173"
+    ],
+    credentials: true
+}));
 app.use(express.json())
 app.use("/registrations", registrationRoutes);
 app.use('/webhook', webhookRoutes)
